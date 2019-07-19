@@ -1,9 +1,33 @@
-import Appointment from '../models/Appointment';
-import User from '../models/User';
 import * as Yup from 'yup';
 import { startOfHour, parseISO, isBefore } from 'date-fns';
+import User from '../models/User';
+import File from '../models/Files';
+import Appointment from '../models/Appointment';
 
 class AppointmentController {
+  async index(req, res) {
+    const appointments = await Appointment.findAll({
+      where: { user_id: req.userId, canceled_at: null },
+      order: ['date'],
+      attributes: ['id', 'date'],
+      include: [
+        {
+          model: User,
+          as: 'provider',
+          attributes: ['id', 'name'],
+          include: [
+            {
+              model: File,
+              as: 'avatar',
+              attributes: ['id', 'path', 'url'],
+            },
+          ],
+        },
+      ],
+    });
+    return res.json(appointments);
+  }
+
   async store(req, res) {
     const schema = Yup.object().shape({
       provider_id: Yup.number().required(),
@@ -31,7 +55,7 @@ class AppointmentController {
     /**
      * Check for past dates
      */
-    const hourStart = startOfHours(parseISO(date));
+    const hourStart = startOfHour(parseISO(date));
 
     if (isBefore(hourStart, new Date())) {
       return res.status(400).json({ error: ' Past dates are not permitted' });
@@ -49,7 +73,7 @@ class AppointmentController {
     if (checkAvailability) {
       return res
         .status(400)
-        .json({ error: 'Appoitment date is not available' });
+        .json({ error: 'Appointment date is not available' });
     }
     const appontment = await Appointment.create({
       user_id: req.userId,
